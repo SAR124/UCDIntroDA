@@ -97,6 +97,11 @@ youtube_raw = pd.merge(left=ytv, right=ytvcategory, how='inner', left_on='catego
 
 youtube_raw['trending_date'] = pd.to_datetime(youtube_raw['trending_date'], format='%y.%d.%m')
 
+youtube = youtube_raw.groupby(['trending_date']).agg(total_views=('views', sum))
+
+youtube = youtube.reset_index()
+
+print(youtube_raw.info())
 # print(youtube_raw['trending_date'])
 
 # import netflix watch data - uk
@@ -160,7 +165,7 @@ min_max_data(netflix_raw, 'datetime')
 min_max_data(youtube_raw, 'trending_date')
 min_max_data(weather_raw, 'year')
 
-weatherdata = (weather_raw[(weather_raw['year'] >= 2018)])
+weatherdata = weather_raw
 start = dt.datetime(1960, 1, 1)
 
 end = dt.datetime(2021, 12, 31)
@@ -189,9 +194,41 @@ weatherdata_uk_avg['bad_weather'] = np.where(
 final_weather_data = pd.merge(left=datelist, right=weatherdata_uk_avg, how='inner', left_on=['year', 'month'],
                               right_on=['year', 'month'])
 
+# Create a Figure and an Axes with plt.subplots
+fig, ax = plt.subplots()
+
+# Plot average_tmax from final_weather_data against date_list
+ln1 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmax'], color='r',
+              label='Average Maximum Temperature')
+
+# Plot average_tmin from final_weather_data against date_list
+ln2 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmin'], color='b',
+              label='Average Minimum Temperature')
+
+ax.grid(True)
+ax.set_xlabel('Date')
+ax.set_ylabel('Temperature (celsius)')
+for tick in ax.get_xticklabels():
+    tick.set_rotation(90)
+
+ax.set_title('Average Monthly Maximum and Minimum Temperature')
+
+lns = ln1 + ln2
+labs = [l.get_label() for l in lns]
+ax.legend(lns, labs, loc='upper right', shadow=True, fancybox=True)
+
+# Call the show function
+plt.show()
+
+# clear and create a new plot
+fig.clear()
+
+
 end = dt.datetime(2019, 7, 1)
 
 final_weather_data = (final_weather_data[(final_weather_data['date_list'] < end)])
+
+final_weather_data = (final_weather_data[(final_weather_data['year'] >= 2018)])
 
 netflix_data_watched_by_date = netflix_data_watched_by_date[netflix_data_watched_by_date['date'] >= '2018-01-01']
 
@@ -225,8 +262,6 @@ ax.set_xlabel('Date')
 ax.set_ylabel('Temperature (celsius)')
 ax2.set_ylabel('Total Watchtime in Days')
 ax.set_title('Average Monthly Maximum and Minimum Temperature against total watchtime')
-# Annotate the point with highest watchtime
-ax2.annotate("Christmas Period", (pd.Timestamp('2019-12-25'), 1))
 # Rotate x-tick labels
 for tick in ax.get_xticklabels():
     tick.set_rotation(45)
@@ -239,6 +274,36 @@ ax.legend(lns, labs, loc='upper right', shadow=True, fancybox=True)
 plt.show()
 
 # clear and create a new plot
+fig.clear()
+
+# Create a Figure and an Axes with plt.subplots
+fig, ax = plt.subplots()
+
+# Plot average_tmax from final_weather_data against date_list
+ln1 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmax'], color='r',
+              label='Average Maximum Temperature')
+
+# Plot average_tmin from final_weather_data against date_list
+ln2 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmin'], color='b',
+              label='Average Minimum Temperature')
+
+# plot youtube watch data
+ax2 = ax.twinx()
+ln3 = ax2.plot(youtube['trending_date'],
+               youtube['total_views'], color='g', label='Total Views')
+
+lns = ln1 + ln2 +ln3
+labs = [l.get_label() for l in lns]
+ax.legend(lns, labs, loc='upper right', shadow=True, fancybox=True)
+
+ax.grid(True)
+ax.set_xlabel('Date')
+ax.set_ylabel('Average Temperature')
+ax2.set_ylabel('Total views of trending')
+ax.set_title('Average Temperature against total views')
+
+plt.show()
+
 fig.clear()
 
 fig, ax = plt.subplots()
