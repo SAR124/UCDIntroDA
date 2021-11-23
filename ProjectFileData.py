@@ -2,11 +2,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import datetime as datetime
+import datetime as dt
 import os
 import json
 from zipfile import ZipFile
 import warnings
+
+from clyent import color
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 warnings.filterwarnings("ignore")
@@ -21,7 +23,14 @@ api.dataset_download_files('JosephW20/uk-met-office-weather-data')
 file_name = "uk-met-office-weather-data.zip"
 
 with ZipFile(file_name, 'r') as zipped:
+    # printing all the contents of the zip file
+    zipped.printdir()
+
+    # extracting all the files
+    print('Extracting all the files now...')
     zipped.extractall()
+    print('Done!')
+    zipped.close()
 
 weather_raw = pd.read_csv('MET Office Weather Data.csv', na_values=['NA'])
 
@@ -102,22 +111,38 @@ print(netflix_raw.head())
 print(netflix_raw.info())
 
 netflix_raw['datetime'] = pd.to_datetime(netflix_raw['datetime'])
-netflix_raw['date'] = netflix_raw['datetime'].dt.date
+netflix_raw['date'] = netflix_raw['datetime'].dt.date.astype('datetime64[ns]')
+netflix_raw['day_name'] = netflix_raw['date'].dt.day_name()
 
 print(netflix_raw.info())
 
 # aggregate netflix data
 # 'Duration' shows how long it was (in sec)
 
-netflix_data = netflix_raw.groupby(netflix_raw['date']).agg(total_watchtime=('duration', sum),
-                                                            average_watchtime=('duration', 'mean'),
-                                                            unique_titles=('title', 'nunique'),
-                                                            unique_users=('user_id', 'nunique'))
-netflix_data_watched = netflix_raw.where(netflix_raw.duration != 0).groupby(netflix_raw['datetime'].dt.date).agg(
+netflix_data = netflix_raw.groupby(['date', 'genres', 'day_name']).agg(total_watchtime=('duration', sum),
+                                                                       average_watchtime=('duration', 'mean'),
+                                                                       unique_titles=('title', 'nunique'),
+                                                                       unique_users=('user_id', 'nunique'))
+netflix_data_watched = netflix_raw.where(netflix_raw.duration != 0).groupby(
+    ['date', 'genres', 'day_name']).agg(
     total_watchtime_watched=('duration', sum),
     average_watchtime_watched=('duration', 'mean'),
     unique_titles_watched=('title', 'nunique'),
     unique_users_watched=('user_id', 'nunique'))
+
+netflix_data_by_date = netflix_raw.groupby(['date', 'day_name']).agg(total_watchtime=('duration', sum),
+                                                                     average_watchtime=('duration', 'mean'),
+                                                                     unique_titles=('title', 'nunique'),
+                                                                     unique_users=('user_id', 'nunique'))
+netflix_data_watched_by_date = netflix_raw.where(netflix_raw.duration != 0).groupby(['date', 'day_name']).agg(
+    total_watchtime_watched=('duration', sum),
+    average_watchtime_watched=('duration', 'mean'),
+    unique_titles_watched=('title', 'nunique'),
+    unique_users_watched=('user_id', 'nunique'))
+
+netflix_data_watched_by_date = netflix_data_watched_by_date.reset_index()
+netflix_data_watched = netflix_data_watched.reset_index()
+netflix_data_watched = netflix_data_watched.set_index('date')
 
 print(netflix_data.info())
 print(netflix_data.head())
@@ -135,10 +160,10 @@ min_max_data(netflix_raw, 'datetime')
 min_max_data(youtube_raw, 'trending_date')
 min_max_data(weather_raw, 'year')
 
-weatherdata = (weather_raw[(weather_raw['year'] >= 2016)])
-start = datetime.datetime(1960, 1, 1)
+weatherdata = (weather_raw[(weather_raw['year'] >= 2018)])
+start = dt.datetime(1960, 1, 1)
 
-end = datetime.datetime(2021, 12, 31)
+end = dt.datetime(2021, 12, 31)
 
 datelist = pd.DataFrame(pd.date_range(start, end), columns=['date_list'])
 datelist['year'] = pd.DatetimeIndex(datelist['date_list']).year
@@ -164,11 +189,89 @@ weatherdata_uk_avg['bad_weather'] = np.where(
 final_weather_data = pd.merge(left=datelist, right=weatherdata_uk_avg, how='inner', left_on=['year', 'month'],
                               right_on=['year', 'month'])
 
-#print(final_weather_data.info())
-#print(final_weather_data.head())
+end = dt.datetime(2019, 7, 1)
 
-sns.relplot(x="date_list", y="average_tmax",
-                data=final_weather_data, kind="line")
+final_weather_data = (final_weather_data[(final_weather_data['date_list'] < end)])
+
+netflix_data_watched_by_date = netflix_data_watched_by_date[netflix_data_watched_by_date['date'] >= '2018-01-01']
+
+print(final_weather_data.info())
+# print(final_weather_data.head())
+
+# Create a Figure and an Axes with plt.subplots
+fig, ax = plt.subplots()
+
+# Plot average_tmax from final_weather_data against date_list
+ln1 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmax'], color='r',
+              label='Average Maximum Temperature')
+
+# Plot average_tmin from final_weather_data against date_list
+ln2 = ax.plot(final_weather_data["date_list"], final_weather_data['average_tmin'], color='b',
+              label='Average Minimum Temperature')
+
+# plot watch data
+
+ax2 = ax.twinx()
+
+netflix_data_watched_by_date['total_watchtime_watched'] = netflix_data_watched_by_date[
+                                                              'total_watchtime_watched'] / 60 / 60 / 24
+netflix_data_watched['total_watchtime_watched'] = netflix_data_watched['total_watchtime_watched'] / 60 / 60 / 24
+
+ln3 = ax2.plot(netflix_data_watched_by_date['date'],
+               netflix_data_watched_by_date['total_watchtime_watched'], color='g', label='Total Watchtime')
+
+ax.grid(True)
+ax.set_xlabel('Date')
+ax.set_ylabel('Temperature (celsius)')
+ax2.set_ylabel('Total Watchtime in Days')
+ax.set_title('Average Monthly Maximum and Minimum Temperature against total watchtime')
+# Annotate the point with highest watchtime
+ax2.annotate("Christmas Period", (pd.Timestamp('2019-12-25'), 1))
+# Rotate x-tick labels
+for tick in ax.get_xticklabels():
+    tick.set_rotation(45)
+
+lns = ln1 + ln2 + ln3
+labs = [l.get_label() for l in lns]
+ax.legend(lns, labs, loc='upper right', shadow=True, fancybox=True)
+
+# Call the show function
+plt.show()
+
+# clear and create a new plot
+fig.clear()
+
+fig, ax = plt.subplots()
+
+sns.set_style("darkgrid")
+
+watched_days = sns.catplot(data=netflix_data_watched_by_date, x='day_name', kind='bar', y='total_watchtime_watched', ci=None)
+watched_days.set_xlabels('Day of week')
+watched_days.set_ylabels('Total watchtime - Days')
 
 plt.show()
+
+fig.clear()
+
+# Plot average_tmax from final_weather_data against date_list
+fig, ax = plt.subplots()
+ax2 = ax.twinx()
+ln4 = ax.plot(final_weather_data["date_list"], final_weather_data["average_rain"], color='r', label='Average Rainfall (mm)')
+ln5 = ax2.plot(netflix_data_watched_by_date['date'],
+               netflix_data_watched_by_date['average_watchtime_watched'], color='g', label='Average Watchtime')
+
+lns = ln4 + ln5
+labs = [l.get_label() for l in lns]
+ax.legend(lns, labs, loc='upper right', shadow=True, fancybox=True)
+
+ax.grid(True)
+ax.set_xlabel('Date')
+ax.set_ylabel('Average Rainfall (mm)')
+ax2.set_ylabel('Average Watchtime in Seconds')
+ax.set_title('Average Rainfall (mm) against total watchtime (s)')
+
+plt.show()
+
+
+## create a youtube weather plot
 
